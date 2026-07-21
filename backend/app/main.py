@@ -14,6 +14,7 @@ from app.api.impersonation import router as impersonation_router
 from app.api.analytics import router as analytics_router
 from app.api.branding import router as branding_router
 from app.api.auth import router as auth_router
+from app.api.invitations import router as invitations_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +53,7 @@ app.include_router(provisioning_router)
 app.include_router(impersonation_router)
 app.include_router(analytics_router)
 app.include_router(branding_router)
+app.include_router(invitations_router)
 
 @app.get("/health")
 async def health_check():

@@ -1,6 +1,5 @@
 from typing import Dict
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession, async_sessionmaker
-from app.models.tenant import Base as TenantBase
 
 class TenantEngineManager:
     """Manages dynamic connection pools / engines per tenant to prevent per-request connection overhead."""
@@ -10,12 +9,15 @@ class TenantEngineManager:
 
     def get_engine(self, tenant_id: str, connection_uri: str) -> AsyncEngine:
         if tenant_id not in self._engines:
-            engine = create_async_engine(
-                connection_uri,
-                pool_pre_ping=True,
-                pool_size=10,
-                max_overflow=20
-            )
+            if "sqlite" in connection_uri or not connection_uri:
+                engine = create_async_engine(connection_uri or "sqlite+aiosqlite:///:memory:", pool_pre_ping=True)
+            else:
+                engine = create_async_engine(
+                    connection_uri,
+                    pool_pre_ping=True,
+                    pool_size=10,
+                    max_overflow=20
+                )
             self._engines[tenant_id] = engine
             self._session_factories[tenant_id] = async_sessionmaker(
                 bind=engine,

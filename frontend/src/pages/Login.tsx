@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeProvider';
 
-export const Login: React.FC<{ onLoginSuccess: (token: string, isSuperAdmin: boolean) => void }> = ({ onLoginSuccess }) => {
+export const Login: React.FC<{
+  onLoginSuccess: (token: string, isSuperAdmin: boolean) => void;
+  onGoToAcceptInvite?: () => void;
+}> = ({ onLoginSuccess, onGoToAcceptInvite }) => {
   const { config } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +35,7 @@ export const Login: React.FC<{ onLoginSuccess: (token: string, isSuperAdmin: boo
 
   return (
     <div style={{ maxWidth: '400px', margin: '4rem auto', padding: '2rem', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-      <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', marginBottom: '1.5rem' }}>{config.app_title}</h2>
+      <h2 style={{ color: 'var(--color-primary, #2563eb)', textAlign: 'center', marginBottom: '1.5rem' }}>{config.app_title}</h2>
       {error && <div style={{ color: '#dc2626', background: '#fee2e2', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.875rem' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '1rem' }}>
@@ -57,10 +60,22 @@ export const Login: React.FC<{ onLoginSuccess: (token: string, isSuperAdmin: boo
         </div>
         <button
           type="submit"
-          style={{ width: '100%', padding: '0.75rem', background: 'var(--color-primary)', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+          style={{ width: '100%', padding: '0.75rem', background: 'var(--color-primary, #2563eb)', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', marginBottom: '1rem' }}
         >
           Sign In
         </button>
+
+        {onGoToAcceptInvite && (
+          <div style={{ textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={onGoToAcceptInvite}
+              style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}
+            >
+              Have an invitation token? Complete Registration
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

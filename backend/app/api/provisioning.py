@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import text
+from sqlalchemy import select, text
 import uuid
 import logging
+from typing import List
+
 from app.api.dependencies import require_super_admin
 from app.models.control import Tenant
 from app.models.tenant import Base as TenantBase, User
@@ -13,7 +15,7 @@ from app.core.config import settings
 
 logger = logging.getLogger("provisioning")
 
-router = APIRouter(prefix="/api/v1/super-admin/tenants", tags=["Provisioning"])
+router = APIRouter(prefix="/api/v1/super-admin/tenants", tags=["Provisioning & SuperAdmin"])
 
 class TenantCreateSchema(BaseModel):
     name: str
@@ -21,6 +23,65 @@ class TenantCreateSchema(BaseModel):
     plan_tier: str = "basic"
     admin_email: str
     admin_password: str
+
+@router.get("", response_model=List[dict])
+async def list_all_tenants(
+    request: Request,
+    claims: dict = Depends(require_super_admin)
+):
+    control_factory = getattr(request.app.state, "control_db_session_factory", None)
+    if not control_factory:
+        return []
+    
+    async with control_factory() as session:
+        res = await session.execute(select(Tenant).order_by(Tenant.name))
+        tenants = res.scalars().all()
+        return [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "subdomain": t.subdomain,
+                "plan_tier": t.plan_tier,
+                "db_connection_uri": t.db_connection_uri,
+                "is_active": t.is_active
+            }
+            for t in tenants
+        ]
+
+@router.get("/{tenant_id}/users", response_model=List[dict])
+async def list_tenant_users(
+    tenant_id: str,
+    request: Request,
+    claims: dict = Depends(require_super_admin)
+):
+    if "postgresql" in settings.CONTROL_DB_URL:
+        base_uri = settings.CONTROL_DB_URL.rsplit('/', 1)[0]
+        clean_id = str(tenant_id).replace('-', '_')
+        conn_uri = f"{base_uri}/tenant_{clean_id}"
+    else:
+        conn_uri = "sqlite+aiosqlite:///:memory:"
+
+    session_factory = tenant_engine_manager.get_session_factory(tenant_id, conn_uri)
+    try:
+        async with session_factory() as session:
+            res = await session.execute(select(User))
+            users = res.scalars().all()
+            return [
+                {
+                    "id": str(u.id),
+                    "email": u.email,
+                    "full_name": u.full_name,
+                    "role": u.role,
+                    "is_active": u.is_active
+                }
+                for u in users
+            ]
+    except Exception as e:
+        logger.exception("Error querying tenant users")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not fetch users for tenant {tenant_id}: {str(e)}"
+        )
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def provision_tenant(
@@ -34,7 +95,6 @@ async def provision_tenant(
         db_name = f"tenant_{clean_id}"
 
         if "postgresql" in settings.CONTROL_DB_URL:
-            # Connect to postgres server (control_plane DB) to create physical new database
             admin_uri = settings.CONTROL_DB_URL
             admin_engine = create_async_engine(admin_uri, isolation_level="AUTOCOMMIT")
             async with admin_engine.connect() as conn:
@@ -46,7 +106,6 @@ async def provision_tenant(
         else:
             db_uri = "sqlite+aiosqlite:///:memory:"
 
-        # Initialize tenant DB schema and seed Tenant Admin
         engine = create_async_engine(db_uri, echo=False)
         async with engine.begin() as conn:
             await conn.run_sync(TenantBase.metadata.create_all)
@@ -63,7 +122,6 @@ async def provision_tenant(
             session.add(admin_user)
             await session.commit()
 
-        # Record in Control DB if session exists
         session_factory_ctrl = getattr(request.app.state, "control_db_session_factory", None)
         if session_factory_ctrl:
             async with session_factory_ctrl() as ctrl_session:
