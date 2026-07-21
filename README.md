@@ -4,6 +4,12 @@ Enterprise-grade multi-tenant architecture featuring physical database-per-tenan
 
 ---
 
+## 🎨 System UI Preview
+
+See [SYSTEM_UI_PREVIEW.md](./SYSTEM_UI_PREVIEW.md) for full visual interface previews of the Login Portal, Super Admin Control Plane, and White-Labeled Tenant Dashboard.
+
+---
+
 ## 🛠 Tech Stack
 
 - **Backend**: FastAPI (Python 3.11+), Async SQLAlchemy 2.0, Asyncpg / Aiosqlite, PyJWT, Bcrypt, Pytest
