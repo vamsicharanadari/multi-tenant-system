@@ -1,0 +1,46 @@
+Methodology: Strict Test-Driven Development (Red $\rightarrow$ Green $\rightarrow$ Refactor).
+Every feature MUST have a failing test written and verified before any implementation code is written.
+TDD Phase Execution Matrix
+┌────────────────────────────────────────────────────────┐
+│                   1. RED PHASE                         │
+│  Write test specification in backend/tests/           │
+│  Run pytest -> CONFIRM TEST FAILS (Red)                │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                  2. GREEN PHASE                        │
+│  Write MINIMAL production code to make test pass       │
+│  Run pytest -> CONFIRM TEST PASSES (Green)             │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                 3. REFACTOR PHASE                      │
+│  Clean up code, enforce typing, maintain passing state │
+│  Run pytest -> CONFIRM TEST STILL PASSES               │
+└────────────────────────────────────────────────────────┘
+Test Suite Specifications & Verification Directives
+Suite 1: Authentication & JWT Context Resolution
+Test File: backend/tests/test_auth_and_context.py
+TDD Sequence:
+test_jwt_claims_structure(): Assert JWT encodes sub, tenant_id, role, and is_super_admin. (Fails initially: JWT encoder not created).
+test_tenant_context_middleware_binding(): Send request with valid JWT $\rightarrow$ assert request.state.db is bound to target tenant session. (Fails initially: Middleware not created).
+test_missing_or_invalid_jwt_returns_401(): Send unauthenticated request $\rightarrow$ assert HTTP 401.
+Suite 2: Strict Tenant Data Isolation
+Test File: backend/tests/test_tenant_isolation.py
+TDD Sequence:
+test_tenant_a_cannot_query_tenant_b_database(): Issue API request as Tenant A user $\rightarrow$ assert query executes only against tenant_a DB pool. (Fails initially: Session factory not created).
+test_cross_tenant_resource_access_fails(): Attempt to query Tenant B resource ID using Tenant A JWT $\rightarrow$ assert HTTP 404 or 403.
+test_concurrent_tenant_session_pooling(): Fire concurrent async requests across 5 distinct tenant_id JWTs $\rightarrow$ verify 5 distinct connection pools in TenantEngineManager.
+Suite 3: Provisioning & Super Admin "God-Mode"
+Test File: backend/tests/test_provisioning_and_impersonation.py
+TDD Sequence:
+test_tenant_provisioning_creates_db_and_schema(): Super Admin calls POST /api/v1/super-admin/tenants $\rightarrow$ assert database tenant_<id> exists, DDL tables (users) exist, and initial admin seeded. (Fails initially: Endpoint not implemented).
+test_non_super_admin_cannot_provision_tenant(): Call provisioning as Tenant Admin/Member $\rightarrow$ assert HTTP 403.
+test_super_admin_impersonation_issues_scoped_jwt(): Call POST /api/v1/super-admin/impersonate $\rightarrow$ assert returned JWT contains tenant_id and impersonated_by claim.
+Suite 4: Plan-Based Feature Gating
+Test File: backend/tests/test_feature_gating.py
+TDD Sequence:
+test_feature_gate_dependency_allows_enabled_tier(): Request endpoint guarded by require_feature("analytics") with "Pro" tier tenant $\rightarrow$ assert HTTP 200. (Fails initially: Dependency guard missing).
+test_feature_gate_dependency_blocks_disabled_tier(): Request endpoint guarded by require_feature("analytics") with "Basic" tier tenant $\rightarrow$ assert HTTP 403 with detail: "Feature disabled for current plan tier".

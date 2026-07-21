@@ -1,0 +1,80 @@
+Here is the complete, standalone Master Plan Document. It integrates the TDD methodology, 30-minute micro-sprint execution structure, file layout, and explicit agent directives into a single document ready to hand off to your AI agent.
+🤖 MASTER PLAN DOCUMENT: Multi-Tenant System Implementation
+Target Repository: [https://github.com/vamsicharanadari/multi-tenant-system](https://github.com/vamsicharanadari/multi-tenant-system)
+Tech Stack: FastAPI (Python), React (TypeScript), PostgreSQL (Async SQLAlchemy 2.0 + Alembic), Redis, Docker
+Core Methodology: STRICT TEST-DRIVEN DEVELOPMENT (TDD)
+Target Completion Window: ~30 Minutes (AI Agent Autonomous Sprint)
+1. System Topology & Architecture
+                                  +---------------------------------+                                  |       React Frontend (SPA)      |                                  | - Dynamic White-Label Engine    |                                  | - Feature Gate Components       |                                  +---------------------------------+                                                  |                                                  | HTTP / REST API                                                  v                                  +---------------------------------+                                  |         FastAPI Backend         |                                  | - Tenant Resolution Middleware  |                                  | - Dynamic Engine Pool Factory   |                                  | - Feature Flag Dependency Engine|                                  +---------------------------------+                                                  |                         +------------------------+------------------------+                         |                                                 |                         v                                                 v        +----------------------------------+             +----------------------------------+        |        Control Plane DB          |             |        Tenant DB (Isolated)     |        | - Tenant Registry & Connection   |             | - Isolated User Accounts         |        |   URIs (Encrypted)               |             | - RBAC (Admin, Member, Viewer)   |        | - Global Feature Flags & Plans   |             | - Domain Business Tables         |        | - Super Admin Credentials        |             |                                  |        +----------------------------------+             +----------------------------------+
+2. Mandatory TDD Development Cycle
+Every feature block MUST follow the Red-Green-Refactor workflow:
+┌────────────────────────────────────────────────────────┐│                   1. RED PHASE                         ││  Write test specification in `backend/tests/`         ││  Run `pytest` -> CONFIRM TEST FAILS                    │└──────────────────────────┬─────────────────────────────┘                           │                           ▼┌────────────────────────────────────────────────────────┐│                  2. GREEN PHASE                        ││  Write MINIMAL production code to pass the test        ││  Run `pytest` -> CONFIRM TEST PASSES                   │└──────────────────────────┬─────────────────────────────┘                           │                           ▼┌────────────────────────────────────────────────────────┐│                 3. REFACTOR PHASE                      ││  Clean up code, enforce typing, maintain passing state ││  Run `pytest` -> CONFIRM TEST STILL PASSES             │└────────────────────────────────────────────────────────┘
+3. 30-Minute Sprint Schedule
+Time Window
+Sprint Task
+TDD Deliverable
+00:00 - 05:00
+Block 1: Scaffolding & Docker Stack
+Directories created, docker-compose up running
+05:00 - 12:00
+Block 2: Auth & Tenant Session Routing
+test_auth_and_context.py (Red $\rightarrow$ Green)
+12:00 - 18:00
+Block 3: Multi-Tenant Data Isolation
+test_tenant_isolation.py (Red $\rightarrow$ Green)
+18:00 - 24:00
+Block 4: Provisioning, Impersonation & Gating
+test_provisioning_and_gating.py (Red $\rightarrow$ Green)
+24:00 - 30:00
+Block 5: React Theme Engine & Full Verification
+Theme Provider + 100% Passing pytest suite
+4. Execution Directives for AI Agent
+BLOCK 1: Infrastructure & Repository Scaffolding (00:00 - 05:00)
+Scaffold file layout:├── backend/│   ├── app/│   │   ├── api/│   │   ├── core/│   │   ├── middleware/│   │   ├── models/│   │   └── services/│   └── tests/├── frontend/│   └── src/│       ├── components/│       ├── context/│       └── pages/└── docker-compose.yml
+Configure docker-compose.yml:
+control_db: Postgres 16 on port 5432 (control_plane DB, user admin, password secret).
+redis: Redis 7 on port 6379.
+backend: FastAPI app service on port 8000.
+frontend: React app service on port 3000.
+Boot infrastructure: docker-compose up -d control_db redis
+BLOCK 2: Auth & Dynamic Tenant Session Routing (05:00 - 12:00)
+Step 2.1 — Red Phase: Write Failing Tests
+Create backend/tests/test_auth_and_context.py:
+test_create_and_decode_jwt(): Assert claims include sub, tenant_id, role, and is_super_admin.
+test_tenant_routing_middleware(): Send request with valid JWT header $\rightarrow$ verify request.state.db binds to the target tenant session.
+Run command: cd backend && pytest tests/test_auth_and_context.py $\rightarrow$ Assert failure (RED).
+Step 2.2 — Green Phase: Implement Minimal Production Code
+Write backend/app/core/security.py (JWT encoding/decoding).
+Write backend/app/models/control.py (Tenant, SuperAdmin, PlanFeature models).
+Write backend/app/core/tenancy.py (TenantEngineManager caching AsyncEngine pools by tenant_id).
+Write backend/app/middleware/tenant.py (Middleware parsing JWTs and injecting tenant AsyncSession).
+Run command: cd backend && pytest tests/test_auth_and_context.py $\rightarrow$ Assert pass (GREEN).
+BLOCK 3: Multi-Tenant Data Isolation (12:00 - 18:00)
+Step 3.1 — Red Phase: Write Failing Tests
+Create backend/tests/test_tenant_isolation.py:
+test_tenant_a_data_isolated_from_tenant_b(): Query database as Tenant A $\rightarrow$ verify zero visibility into Tenant B records.
+test_cross_tenant_lookup_denied(): Request Tenant B resource ID with Tenant A JWT $\rightarrow$ assert HTTP 403 or 404.
+Run command: cd backend && pytest tests/test_tenant_isolation.py $\rightarrow$ Assert failure (RED).
+Step 3.2 — Green Phase: Implement Minimal Production Code
+Write tenant database base schemas in backend/app/models/tenant.py (User model scoped to tenant DBs).
+Configure dynamic session context resolution in API dependency wrappers (get_tenant_db).
+Run command: cd backend && pytest tests/test_tenant_isolation.py $\rightarrow$ Assert pass (GREEN).
+BLOCK 4: Provisioning, Impersonation & Feature Gating (18:00 - 24:00)
+Step 4.1 — Red Phase: Write Failing Tests
+Create backend/tests/test_provisioning_and_gating.py:
+test_super_admin_provision_tenant_creates_database(): Call POST /api/v1/super-admin/tenants $\rightarrow$ assert database tenant_<id> is created and migrated.
+test_impersonation_generates_audited_jwt(): Call POST /api/v1/super-admin/impersonate $\rightarrow$ verify impersonated_by claim in output token.
+test_feature_gate_dependency(): Request endpoint guarded by require_feature("advanced_analytics") $\rightarrow$ assert HTTP 200 for Pro plan, HTTP 403 for Basic plan.
+Run command: cd backend && pytest tests/test_provisioning_and_gating.py $\rightarrow$ Assert failure (RED).
+Step 4.2 — Green Phase: Implement Minimal Production Code
+Write backend/app/api/provisioning.py (CREATE DATABASE tenant_<id>, run DDL, seed Tenant Admin).
+Write backend/app/api/impersonation.py (Audit logging + impersonation JWT generation).
+Write backend/app/api/dependencies.py (require_feature dependency guard checking plan capabilities).
+Run command: cd backend && pytest tests/test_provisioning_and_gating.py $\rightarrow$ Assert pass (GREEN).
+BLOCK 5: Frontend Theme Engine & Verification Pass (24:00 - 30:00)
+Frontend Theme Provider (frontend/src/context/ThemeProvider.tsx):
+Fetch branding config on load (GET /api/v1/tenant/config).
+Update CSS root variables dynamically:TypeScriptdocument.documentElement.style.setProperty('--color-primary', config.primary_color);document.documentElement.style.setProperty('--color-secondary', config.secondary_color);
+Frontend Feature Gate (frontend/src/components/FeatureGate.tsx):
+React component checking active plan flags and rendering an upgrade fallback banner when disabled.
+Full Suite Verification:Bashcd backend && pytest tests/ -vConfirm a 100% test pass rate across all TDD test suites.

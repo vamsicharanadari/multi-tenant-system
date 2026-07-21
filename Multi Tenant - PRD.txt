@@ -1,0 +1,95 @@
+Here is your comprehensive, developer-ready Product Requirements Document (PRD). You can hand this directly to your tech lead or engineering team to scaffold the project, set up the database schemas, and implement the API routes.
+Product Requirements Document (PRD)
+Project Name: Multi-Tenant Enterprise Application Framework
+Tech Stack: FastAPI (Python), React (TypeScript), PostgreSQL, Async SQLAlchemy 2.0, Alembic, Docker
+Architecture Pattern: Control Plane + Isolated Database-per-Tenant
+Status: Approved for Implementation
+1. System Architecture & Topology
+The application relies on a dual-tier database architecture to ensure strict physical data isolation while maintaining centralized management.
+                                  +---------------------------------+                                  |       React Frontend (SPA)      |                                  | - Dynamic White-Label Engine   |                                  | - JWT & Role Storage           |                                  +---------------------------------+                                                  |                                                  | HTTP / JSON Requests                                                  v                                  +---------------------------------+                                  |         FastAPI Backend         |                                  | - Tenant Resolution Middleware  |                                  | - Dynamic Engine / Session Pool |                                  | - Feature Flag Dependency Engine|                                  +---------------------------------+                                                  |                         +------------------------+------------------------+                         |                                                 |                         v                                                 v        +----------------------------------+             +----------------------------------+        |        Control Plane DB          |             |        Tenant DB (Isolated)     |        | - Tenant Registry & Connection   |             | - Isolated User Accounts         |        |   URIs (Encrypted)               |             | - RBAC (Admin, Member, Viewer)   |        | - Global Feature Flags & Plans   |             | - Domain Business Tables         |        | - Super Admin Credentials        |             |                                  |        +----------------------------------+             +----------------------------------+
+2. Authentication, JWT Strategy, & Context Resolution
+2.1 JWT Payload Specification
+Authentication is stateless. Upon validation, the backend issues an RS256 or HS256 signed JWT.
+JSON
+{  "sub": "usr_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",  "tenant_id": "tnt_110ec48a-a070-4ac8-a146-17b20a9ae369",  "role": "Admin",  "is_super_admin": false,  "impersonated_by": null,  "exp": 1784580000,  "iat": 1784544000}
+2.2 FastAPI Context Resolution Flow
+Request Interception: Middleware extracts Authorization: Bearer <JWT>.
+Token Verification: Validates signature and expiration.
+Tenant Routing: Reads tenant_id from claims. Retrieves connection URI from cache/Control DB.
+Session Injection: Instantiates a scoped async SQLAlchemy session (AsyncSession) targeting tenant_<tenant_id> and injects it into the request scope (request.state.db).
+3. Detailed Database Schemas (PostgreSQL)
+3.1 Control Plane Database (control_plane_db)
+SQL
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";-- Global Tenant RegistryCREATE TABLE tenants (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),    name VARCHAR(255) NOT NULL,    subdomain VARCHAR(63) UNIQUE NOT NULL,    db_connection_uri TEXT NOT NULL, -- Encrypted at rest    plan_tier VARCHAR(50) NOT NULL DEFAULT 'basic',    branding_config JSONB NOT NULL DEFAULT '{        "primary_color": "#3B82F6",        "secondary_color": "#1E293B",        "logo_url": "https://assets.app.com/default-logo.png",        "app_title": "Enterprise App"    }'::jsonb,    is_active BOOLEAN NOT NULL DEFAULT TRUE,    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());-- Super Admins (System Owners)CREATE TABLE super_admins (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),    email VARCHAR(255) UNIQUE NOT NULL,    password_hash VARCHAR(255) NOT NULL,    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());-- Plan Feature Flags MappingCREATE TABLE plan_features (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),    plan_tier VARCHAR(50) NOT NULL,    feature_key VARCHAR(100) NOT NULL,    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,    CONSTRAINT uq_plan_feature UNIQUE (plan_tier, feature_key));
+3.2 Tenant Database Schema (tenant_<tenant_id>)
+Executed on every newly provisioned tenant DB instance.
+SQL
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";-- Tenant User Accounts (1-to-1 bound to this DB)CREATE TABLE users (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),    email VARCHAR(255) UNIQUE NOT NULL,    password_hash VARCHAR(255) NOT NULL,    full_name VARCHAR(255) NOT NULL,    role VARCHAR(20) NOT NULL CHECK (role IN ('Admin', 'Member', 'Viewer')) DEFAULT 'Member',    is_active BOOLEAN NOT NULL DEFAULT TRUE,    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());-- Pending InvitationsCREATE TABLE user_invitations (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),    email VARCHAR(255) NOT NULL,    role VARCHAR(20) NOT NULL CHECK (role IN ('Admin', 'Member', 'Viewer')),    token VARCHAR(255) UNIQUE NOT NULL,    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());
+4. User Roles & Access Control Matrix
+Roles are uniform across all tenants:
+Permission / Action
+Super Admin
+Tenant Admin
+Member
+Viewer
+Provision New Tenant DB
+Yes
+No
+No
+No
+Impersonate Tenant Account
+Yes
+No
+No
+No
+Manage Global Feature Flags
+Yes
+No
+No
+No
+Configure Tenant Branding / Theme
+No
+Yes
+No
+No
+Invite Users & Assign Roles
+No
+Yes
+No
+No
+Standard Read/Write Business Data
+No
+Yes
+Yes
+No
+Read-Only Business Data
+No
+Yes
+Yes
+Yes
+5. Functional Requirements & Feature Specifications
+5.1 Super Admin "God-Mode" Impersonation
+Endpoint: POST /api/v1/super-admin/impersonate
+Payload: { "target_tenant_id": "UUID", "target_user_id": "UUID" }
+Behavior:
+Validates requesting token contains is_super_admin: true.
+Generates a temporary JWT (valid for 15 minutes) bound to target tenant_id and target_user_id.
+Sets claim impersonated_by: <super_admin_id>.
+All downstream operations audit log the action under the Super Admin's ID.
+5.2 Frontend White-Labeling Engine
+Execution:
+On login or session refresh, React fetches GET /api/v1/tenant/config.
+Response returns branding_config JSON.
+React dynamically updates root CSS variables:JavaScriptdocument.documentElement.style.setProperty('--primary-color', config.primary_color);document.documentElement.style.setProperty('--secondary-color', config.secondary_color);
+Dynamically switches favicon and application logo in navbar.
+5.3 Plan-Based Feature Gating
+FastAPI Backend Dependency:Pythondef require_feature(feature_key: str):    async def dependency(request: Request, db: AsyncSession = Depends(get_control_db)):        tenant_plan = request.state.tenant_plan        enabled = await check_feature_flag(db, tenant_plan, feature_key)        if not enabled:            raise HTTPException(status_code=403, detail=f"Feature '{feature_key}' not included in plan.")    return dependency
+React Guard Component:TypeScript<FeatureGate flag="enable_advanced_analytics" fallback={<UpgradePlanBanner />}>   <AnalyticsDashboard /></FeatureGate>
+6. Migration Strategy (Alembic)
+Migrations must handle both database types cleanly:
+Control DB Migrations:alembic -c alembic_control.ini upgrade head
+Tenant DB Migrations (Multi-Tenant Loop):FastAPI CLI script iterates through active tenant connection strings in control_plane_db and executes Alembic programmatically against each tenant DB:Pythonfor tenant in active_tenants:    run_async_migrations(tenant.db_connection_uri)
+7. Non-Functional Requirements (NFRs)
+Data Isolation Security: Zero cross-tenant SQL queries. Every request MUST obtain its DB engine dynamic binding via request.state.tenant_id.
+Performance: Connection pools for individual tenant DBs must be cached using a dynamic engine factory dictionary to prevent pool creation overhead per HTTP request.
+Audit Trails: Impersonation and user role updates must emit structured JSON log entries containing timestamp, actor ID, target tenant, and action.

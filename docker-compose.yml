@@ -1,0 +1,46 @@
+services:
+  control_db:
+    image: postgres:16-alpine
+    container_name: multi_tenant_control_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: control_plane
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d control_plane"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: multi_tenant_redis
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: multi_tenant_backend
+    ports:
+      - "8000:8000"
+    environment:
+      CONTROL_DB_URL: postgresql+asyncpg://admin:secret@control_db:5432/control_plane
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: super-secret-key-for-jwt-signing
+    depends_on:
+      control_db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: multi_tenant_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
