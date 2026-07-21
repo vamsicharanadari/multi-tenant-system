@@ -15,13 +15,13 @@ async def seed_data():
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     
     async with session_factory() as session:
-        res = await session.execute(select(SuperAdmin).where(SuperAdmin.email == "admin@enterprise.com"))
+        res = await session.execute(select(SuperAdmin).where(SuperAdmin.email == "admin@tms.com"))
         existing_admin = res.scalar_one_or_none()
         
         if not existing_admin:
             admin = SuperAdmin(
-                email="admin@enterprise.com",
-                password_hash=hash_password("supersecretpassword")
+                email="admin@tms.com",
+                password_hash=hash_password("admin")
             )
             
             f1 = PlanFeature(plan_tier="pro", feature_key="advanced_analytics", is_enabled=True)
@@ -29,9 +29,11 @@ async def seed_data():
             
             session.add_all([admin, f1, f2])
             await session.commit()
-            print("Successfully seeded Super Admin and Plan Features into control_plane DB!")
+            print("Successfully seeded Super Admin admin@tms.com into control_plane DB!")
         else:
-            print("Super Admin already exists.")
+            existing_admin.password_hash = hash_password("admin")
+            await session.commit()
+            print("Updated Super Admin admin@tms.com password!")
             
     await engine.dispose()
 

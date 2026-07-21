@@ -26,19 +26,28 @@ async def lifespan(app: FastAPI):
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     app.state.control_db_session_factory = session_factory
 
-    # Auto-seed Super Admin
+    # Auto-seed / update Super Admin (admin@tms.com / admin)
     async with session_factory() as session:
-        res = await session.execute(select(SuperAdmin).where(SuperAdmin.email == "admin@enterprise.com"))
+        res = await session.execute(select(SuperAdmin).where(SuperAdmin.email == "admin@tms.com"))
         existing_admin = res.scalar_one_or_none()
         if not existing_admin:
             admin = SuperAdmin(
-                email="admin@enterprise.com",
-                password_hash=hash_password("supersecretpassword")
+                email="admin@tms.com",
+                password_hash=hash_password("admin")
             )
+            session.add(admin)
+        else:
+            existing_admin.password_hash = hash_password("admin")
+
+        # Check PlanFeatures
+        res_f = await session.execute(select(PlanFeature))
+        existing_features = res_f.scalars().all()
+        if not existing_features:
             f1 = PlanFeature(plan_tier="pro", feature_key="advanced_analytics", is_enabled=True)
             f2 = PlanFeature(plan_tier="basic", feature_key="advanced_analytics", is_enabled=False)
-            session.add_all([admin, f1, f2])
-            await session.commit()
+            session.add_all([f1, f2])
+
+        await session.commit()
 
     yield
     await engine.dispose()
